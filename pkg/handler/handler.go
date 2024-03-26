@@ -27,17 +27,41 @@ var SETs = map[string]string{}
 var SETsMu = sync.RWMutex{}
 
 func set(args []resp.Value) resp.Value {
-	if len(args) != 2 {
-		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'set' command"}
+	if len(args) < 2 {
+		return resp.Value{Typ: "error", Str: "ERR syntax error"}
 	}
 
 	key := args[0].Bulk
 	value := args[1].Bulk
+	setter := ""
+	if len(args) == 3 {
+		setter = args[2].Bulk
+	}
+
+	switch setter {
+	case "NX":
+		SETsMu.RLock()
+		_, ok := SETs[key]
+		SETsMu.RUnlock()
+		if ok {
+			return resp.Value{Typ: "null"}
+		}
+	case "XX":
+		SETsMu.RLock()
+		_, ok := SETs[key]
+		SETsMu.RUnlock()
+		if !ok {
+			return resp.Value{Typ: "null"}
+		}
+	default:
+		if setter != "" {
+			return resp.Value{Typ: "error", Str: "ERR syntax error"}
+		}
+	}
 
 	SETsMu.Lock()
 	SETs[key] = value
 	SETsMu.Unlock()
-
 	return resp.Value{Typ: "string", Str: "OK"}
 }
 
