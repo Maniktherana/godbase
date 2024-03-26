@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/maniktherana/godbase/pkg/resp"
 )
@@ -23,7 +25,7 @@ func ping(args []resp.Value) resp.Value {
 	return resp.Value{Typ: "string", Str: args[0].Bulk}
 }
 
-var SETs = map[string]string{}
+var SETs = map[string]resp.Value{}
 var SETsMu = sync.RWMutex{}
 
 func set(args []resp.Value) resp.Value {
@@ -34,8 +36,33 @@ func set(args []resp.Value) resp.Value {
 	key := args[0].Bulk
 	value := args[1].Bulk
 	setter := ""
+	ex := 0
+	px := 0
+
 	if len(args) == 3 {
 		setter = args[2].Bulk
+		if setter != "NX" && setter != "XX" {
+			return resp.Value{Typ: "error", Str: "ERR syntax error"}
+		}
+	}
+
+	if len(args) > 3 {
+		switch args[2].Bulk {
+		case "EX":
+			ex, _ = strconv.Atoi(args[3].Bulk)
+		case "PX":
+			px, _ = strconv.Atoi(args[3].Bulk)
+		default:
+			setter = args[2].Bulk
+		}
+		switch args[3].Bulk {
+		case "EX":
+			ex, _ = strconv.Atoi(args[4].Bulk)
+		case "PX":
+			px, _ = strconv.Atoi(args[4].Bulk)
+		default:
+			setter = args[3].Bulk
+		}
 	}
 
 	switch setter {
@@ -59,8 +86,17 @@ func set(args []resp.Value) resp.Value {
 		}
 	}
 
+	expiration := time.Now()
+	val := resp.Value{Typ: "bulk", Bulk: value}
+	if ex > 0 {
+		expiration = expiration.Add(time.Duration(ex) * time.Second)
+	} else if px > 0 {
+		expiration = expiration.Add(time.Duration(px) * time.Millisecond)
+	}
+	val.Expires = expiration.Unix()
+
 	SETsMu.Lock()
-	SETs[key] = value
+	SETs[key] = val
 	SETsMu.Unlock()
 	return resp.Value{Typ: "string", Str: "OK"}
 }
@@ -74,13 +110,17 @@ func get(args []resp.Value) resp.Value {
 
 	SETsMu.RLock()
 	value, ok := SETs[key]
+	if value.Expires > 0 && value.Expires < time.Now().Unix() {
+		delete(SETs, key)
+		return resp.Value{Typ: "null"}
+	}
 	SETsMu.RUnlock()
 
 	if !ok {
 		return resp.Value{Typ: "null"}
 	}
 
-	return resp.Value{Typ: "bulk", Bulk: value}
+	return value
 }
 
 var HSETs = map[string]map[string]string{}

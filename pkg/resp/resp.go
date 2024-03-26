@@ -16,11 +16,12 @@ const (
 )
 
 type Value struct {
-	Typ   string
-	Str   string
-	Num   int
-	Bulk  string
-	Array []Value
+	Typ     string
+	Str     string
+	Num     int
+	Bulk    string
+	Array   []Value
+	Expires int64
 }
 
 type Resp struct {
