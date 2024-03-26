@@ -36,7 +36,7 @@ func set(args []resp.Value) resp.Value {
 	key := args[0].Bulk
 	value := args[1].Bulk
 	var setter string
-	var keepttl bool
+	keepttl := false
 	var get bool
 	var ex, px int
 
@@ -111,7 +111,12 @@ func set(args []resp.Value) resp.Value {
 	}
 
 	// Setting the value
-	val := resp.Value{Typ: "bulk", Bulk: value, Expires: expiration.Unix()}
+	var val resp.Value
+	if expiration.Unix() > 0 {
+		val = resp.Value{Typ: "string", Str: value, Expires: expiration.Unix()}
+	} else {
+		val = resp.Value{Typ: "string", Str: value}
+	}
 	SETsMu.Lock()
 	SETs[key] = val
 	SETsMu.Unlock()
