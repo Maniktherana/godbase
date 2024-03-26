@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,9 +44,9 @@ func set(args []resp.Value) resp.Value {
 
 	// Parsing command options
 	for i := 2; i < len(args); i++ {
-		switch args[i].Bulk {
+		switch strings.ToUpper(args[i].Bulk) {
 		case "NX", "XX":
-			setter = args[i].Bulk
+			setter = strings.ToUpper(args[i].Bulk)
 		case "KEEPTTL":
 			keepttl = true
 		case "GET":
@@ -137,7 +139,7 @@ func get(args []resp.Value) resp.Value {
 
 	SETsMu.RLock()
 	value, ok := SETs[key]
-	if value.Expires > 0 && value.Expires < time.Now().Unix() {
+	if value.Expires > 0 && value.Expires > time.Now().Unix() {
 		delete(SETs, key)
 		return resp.Value{Typ: "null"}
 	}
@@ -146,6 +148,7 @@ func get(args []resp.Value) resp.Value {
 	if !ok {
 		return resp.Value{Typ: "null"}
 	}
+	fmt.Println("getting value ", value)
 
 	return value
 }
