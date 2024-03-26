@@ -2,9 +2,12 @@ package aof
 
 import (
 	"bufio"
+	"io"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/maniktherana/godbase/pkg/resp"
 )
 
 type Aof struct {
@@ -28,9 +31,7 @@ func NewAof(path string) (*Aof, error) {
 	go func() {
 		for {
 			aof.Mu.Lock()
-
 			aof.File.Sync()
-
 			aof.Mu.Unlock()
 
 			time.Sleep(time.Second)
@@ -45,4 +46,27 @@ func (aof *Aof) Close() error {
 	defer aof.Mu.Unlock()
 
 	return aof.File.Close()
+}
+
+func (aof *Aof) Read(fn func(value resp.Value)) error {
+	aof.Mu.Lock()
+	defer aof.Mu.Unlock()
+
+	aof.File.Seek(0, io.SeekStart)
+
+	reader := resp.NewResp(aof.File)
+
+	for {
+		value, err := reader.Read()
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+
+			return err
+		}
+		fn(value)
+	}
+
+	return nil
 }
