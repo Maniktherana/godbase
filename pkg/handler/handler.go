@@ -35,36 +35,46 @@ func set(args []resp.Value) resp.Value {
 
 	key := args[0].Bulk
 	value := args[1].Bulk
-	setter := ""
-	ex := 0
-	px := 0
+	var setter string
+	var keepttl bool
+	var get bool
+	var ex, px int
 
-	if len(args) == 3 {
-		setter = args[2].Bulk
-		if setter != "NX" && setter != "XX" {
+	// Parsing command options
+	for i := 2; i < len(args); i++ {
+		switch args[i].Bulk {
+		case "NX", "XX":
+			setter = args[i].Bulk
+		case "KEEPTTL":
+			keepttl = true
+		case "GET":
+			get = true
+		case "EX":
+			if keepttl {
+				return resp.Value{Typ: "error", Str: "ERR syntax error"}
+			}
+			if i+1 < len(args) {
+				ex, _ = strconv.Atoi(args[i+1].Bulk)
+				i++
+			} else {
+				return resp.Value{Typ: "error", Str: "ERR syntax error"}
+			}
+		case "PX":
+			if keepttl {
+				return resp.Value{Typ: "error", Str: "ERR syntax error"}
+			}
+			if i+1 < len(args) {
+				px, _ = strconv.Atoi(args[i+1].Bulk)
+				i++
+			} else {
+				return resp.Value{Typ: "error", Str: "ERR syntax error"}
+			}
+		default:
 			return resp.Value{Typ: "error", Str: "ERR syntax error"}
 		}
 	}
 
-	if len(args) > 3 {
-		switch args[2].Bulk {
-		case "EX":
-			ex, _ = strconv.Atoi(args[3].Bulk)
-		case "PX":
-			px, _ = strconv.Atoi(args[3].Bulk)
-		default:
-			setter = args[2].Bulk
-		}
-		switch args[3].Bulk {
-		case "EX":
-			ex, _ = strconv.Atoi(args[4].Bulk)
-		case "PX":
-			px, _ = strconv.Atoi(args[4].Bulk)
-		default:
-			setter = args[3].Bulk
-		}
-	}
-
+	// Handling SETTER options
 	switch setter {
 	case "NX":
 		SETsMu.RLock()
@@ -80,25 +90,37 @@ func set(args []resp.Value) resp.Value {
 		if !ok {
 			return resp.Value{Typ: "null"}
 		}
-	default:
-		if setter != "" {
-			return resp.Value{Typ: "error", Str: "ERR syntax error"}
+	}
+
+	// Handling expiration
+	expiration := time.Now()
+	if keepttl {
+		SETsMu.RLock()
+		v, ok := SETs[key]
+		SETsMu.RUnlock()
+		if !ok {
+			return resp.Value{Typ: "null"}
+		}
+		expiration = time.Unix(v.Expires, 0)
+	} else {
+		if ex > 0 {
+			expiration = expiration.Add(time.Duration(ex) * time.Second)
+		} else if px > 0 {
+			expiration = expiration.Add(time.Duration(px) * time.Millisecond)
 		}
 	}
 
-	expiration := time.Now()
-	val := resp.Value{Typ: "bulk", Bulk: value}
-	if ex > 0 {
-		expiration = expiration.Add(time.Duration(ex) * time.Second)
-	} else if px > 0 {
-		expiration = expiration.Add(time.Duration(px) * time.Millisecond)
-	}
-	val.Expires = expiration.Unix()
-
+	// Setting the value
+	val := resp.Value{Typ: "bulk", Bulk: value, Expires: expiration.Unix()}
 	SETsMu.Lock()
 	SETs[key] = val
 	SETsMu.Unlock()
-	return resp.Value{Typ: "string", Str: "OK"}
+
+	if get {
+		return val
+	} else {
+		return resp.Value{Typ: "string", Str: "OK"}
+	}
 }
 
 func get(args []resp.Value) resp.Value {
