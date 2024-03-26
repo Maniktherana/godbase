@@ -28,8 +28,8 @@ func main() {
 	defer conn.Close()
 
 	for {
-		resp := resp.NewResp(conn)
-		value, err := resp.Read()
+		rsp := resp.NewResp(conn)
+		value, err := rsp.Read()
 		if err != nil {
 			fmt.Println(err)
 			return
