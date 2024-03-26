@@ -1,8 +1,8 @@
 rs:
-	go run ./cmd/redis-server/main.go
+	go run ./cmd/server/main.go
 
 build:
-	go build -o ./bin/redis/redis-server ./cmd/redis-server/main.go
+	go build -o ./bin/redis/server ./cmd/server/main.go
 
 PHONY: rs build
 
