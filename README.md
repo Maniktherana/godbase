@@ -4,6 +4,16 @@ A drop-in replacement for redis written in Go
 
 ![Go](https://img.shields.io/badge/go-%2300ADD8.svg?style=for-the-badge&logo=go&logoColor=white) ![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)
 
+
+## Table of Contents
+- [Introduction](#introduction)
+- [Feature parity](#feature-parity)
+- [Available commands](#available-commands)
+    - [The SET Command](#the-set-command)
+- [Installation](#installation)
+- [Compatibility](#compatibility)
+- [License](#license)
+
 ## Introduction
 `Godbase` is a blazingly fast drop-in replacement for redis, built with golang.
 
@@ -29,7 +39,7 @@ The project is still in its early stages and is not recommended for production u
 | Pub/Sub                   | ✅     | ❌        |
 | Transactions              | ✅     | ❌        |
 
-### Available commands
+## Available commands
 
 The following commands are supported by Godbase as of now:
 
@@ -49,6 +59,7 @@ The following commands are supported by Godbase as of now:
 ```
 SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | KEEPTTL]
 ```
+**Time complexity**: O(1)
 The SET command supports the following options:
 
 EX seconds -- Set the specified expire time, in seconds (a positive integer).
