@@ -70,3 +70,15 @@ func (aof *Aof) Read(fn func(value resp.Value)) error {
 
 	return nil
 }
+
+func (aof *Aof) Write(value resp.Value) error {
+	aof.Mu.Lock()
+	defer aof.Mu.Unlock()
+
+	_, err := aof.File.Write(value.Marshal())
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -80,6 +80,10 @@ func main() {
 			continue
 		}
 
+		if command == "SET" || command == "HSET" {
+			aof.Write(value)
+		}
+
 		result := handler(args)
 		writer.Write(result)
 	}
