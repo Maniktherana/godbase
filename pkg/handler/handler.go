@@ -114,7 +114,7 @@ func set(args []resp.Value) resp.Value {
 
 	// Setting the value
 	var val resp.Value
-	if expiration.Unix() > 0 {
+	if expiration.Unix() > time.Now().Unix() {
 		val = resp.Value{Typ: "string", Str: value, Expires: expiration.Unix()}
 	} else {
 		val = resp.Value{Typ: "string", Str: value}
@@ -195,7 +195,7 @@ func hget(args []resp.Value) resp.Value {
 }
 
 func hgetall(args []resp.Value) resp.Value {
-	if len(args) != 2 {
+	if len(args) != 1 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'hget' command"}
 	}
 
