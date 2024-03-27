@@ -2,6 +2,7 @@ package handler
 
 import (
 	"testing"
+	"time"
 
 	"github.com/maniktherana/godbase/pkg/resp"
 	"github.com/stretchr/testify/assert"
@@ -90,20 +91,31 @@ func TestSetHandler(t *testing.T) {
 }
 
 func TestGetHandler(t *testing.T) {
-	// Set up initial value
-	SETsMu.Lock()
-	SETs["mykey"] = resp.Value{Typ: "string", Str: "myvalue"}
-	SETsMu.Unlock()
-
 	tests := []struct {
 		name     string
 		args     []resp.Value
+		setup    func()
 		expected resp.Value
 	}{
 		{
-			name:     "Existing Key",
-			args:     []resp.Value{{Typ: "bulk", Bulk: "mykey"}},
+			name: "Existing Key",
+			args: []resp.Value{{Typ: "bulk", Bulk: "mykey"}},
+			setup: func() {
+				SETsMu.Lock()
+				SETs["mykey"] = resp.Value{Typ: "string", Str: "myvalue"}
+				SETsMu.Unlock()
+			},
 			expected: resp.Value{Typ: "string", Str: "myvalue"},
+		},
+		{
+			name: "Expired Key",
+			args: []resp.Value{{Typ: "bulk", Bulk: "mykey"}},
+			setup: func() {
+				// Set up initial value with expiry time
+				set([]resp.Value{{Typ: "bulk", Bulk: "mykey"}, {Typ: "bulk", Bulk: "dummyvalue"}, {Typ: "bulk", Bulk: "EX"}, {Typ: "bulk", Bulk: "1"}})
+				time.Sleep(2 * time.Second)
+			},
+			expected: resp.Value{Typ: "null"},
 		},
 		{
 			name:     "Non Existing Key",
@@ -114,6 +126,9 @@ func TestGetHandler(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			if test.setup != nil {
+				test.setup()
+			}
 			result := get(test.args)
 			assert.Equal(t, test.expected, result)
 		})

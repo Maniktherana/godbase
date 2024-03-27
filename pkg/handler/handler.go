@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -139,16 +138,18 @@ func get(args []resp.Value) resp.Value {
 
 	SETsMu.RLock()
 	value, ok := SETs[key]
-	if value.Expires > 0 && value.Expires > time.Now().Unix() {
-		delete(SETs, key)
-		return resp.Value{Typ: "null"}
-	}
 	SETsMu.RUnlock()
 
 	if !ok {
 		return resp.Value{Typ: "null"}
 	}
-	fmt.Println("getting value ", value)
+
+	if value.Expires > 0 && value.Expires < time.Now().Unix() {
+		SETsMu.Lock()
+		delete(SETs, key)
+		SETsMu.Unlock()
+		return resp.Value{Typ: "null"}
+	}
 
 	return value
 }
