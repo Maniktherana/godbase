@@ -17,7 +17,7 @@ A drop-in replacement for redis written in Go
 ## Introduction
 `Godbase` is a blazingly fast drop-in replacement for redis, built with golang.
 
-It's a fun project that i started to learn more about redis and golang, taking help from this fantastic [guide](https://www.build-redis-from-scratch.dev/en/introduction) by [ahmedash95](https://github.com/ahmedash95). It builds upon the concepts in this guide and adds features such as `TTL` options for the `SET` command.
+It's a fun project that i started to learn more about redis and golang, taking help from this fantastic [guide](https://www.build-redis-from-scratch.dev/en/introduction) by [ahmedash95](https://github.com/ahmedash95). This project builds upon the concepts in this guide and adds features such as `TTL` options for the `SET` command.
 
 The project is still in its early stages and is not recommended for production use. It's a fun project to learn more about redis and golang.
 
