@@ -45,11 +45,8 @@ The following commands are supported by Godbase as of now:
 #### MISC
 `PING` 
 
-#### Keys
-`DEL` `EXISTS` `KEYS` `EXPIRE` `TTL`
-
 #### Strings
-`SET` `GET` `APPEND` `INCR` `INCRBY` `DECR` `DECRBY` `MSET` `MGET`
+`SET` `GET`
 
 #### Hashes
 `HSET` `HGET` `HGETALL` 
