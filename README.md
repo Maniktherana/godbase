@@ -59,7 +59,6 @@ The following commands are supported by Godbase as of now:
 ```
 SET key value [NX | XX] [GET] [EX seconds | PX milliseconds | KEEPTTL]
 ```
-**Time complexity**: O(1)
 The SET command supports the following options:
 
  - EX seconds -- Set the specified expire time, in seconds (a positive integer).
@@ -68,6 +67,8 @@ The SET command supports the following options:
  - XX -- Only set the key if it already exists.
  - KEEPTTL -- Retain the time to live associated with the key.
  - GET -- Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string.
+
+**Time complexity**: O(1)
 
 ## Installation
 
