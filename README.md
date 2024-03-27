@@ -80,7 +80,7 @@ make build
 
 ## Compatibility
 
-Godbase is compatible with the redis-cli. You can use the redis-cli to interact with godbase for the supported commands.
+Godbase is compatible with existing redis clients. You can use the redis-cli to interact with godbase for the supported commands.
 
 ```
 redis-cli -h localhost -p 6379
