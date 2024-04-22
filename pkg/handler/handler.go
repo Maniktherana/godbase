@@ -75,7 +75,7 @@ func set(args []resp.Value) resp.Value {
 		}
 	}
 
-	// Handling SETTER options
+	// Handling SETTER (XX/NX) options
 	switch setter {
 	case "NX":
 		SETsMu.RLock()
