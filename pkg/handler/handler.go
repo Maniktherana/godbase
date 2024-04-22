@@ -1,15 +1,18 @@
 package handler
 
 import (
+	"github.com/maniktherana/godbase/pkg/Database"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/maniktherana/godbase/pkg/resp"
 )
 
-var Handlers = map[string]func([]resp.Value) resp.Value{
+var Handlers = map[string]func(
+	[]resp.Value,
+	*Database.Kv,
+) resp.Value{
 	"PING":    ping,
 	"SET":     set,
 	"GET":     get,
@@ -18,7 +21,7 @@ var Handlers = map[string]func([]resp.Value) resp.Value{
 	"HGETALL": hgetall,
 }
 
-func ping(args []resp.Value) resp.Value {
+func ping(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) == 0 {
 		return resp.Value{Typ: "string", Str: "PONG"}
 	}
@@ -26,10 +29,7 @@ func ping(args []resp.Value) resp.Value {
 	return resp.Value{Typ: "string", Str: args[0].Bulk}
 }
 
-var SETs = map[string]resp.Value{}
-var SETsMu = sync.RWMutex{}
-
-func set(args []resp.Value) resp.Value {
+func set(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) < 2 {
 		return resp.Value{Typ: "error", Str: "ERR syntax error"}
 	}
@@ -78,16 +78,16 @@ func set(args []resp.Value) resp.Value {
 	// Handling SETTER (XX/NX) options
 	switch setter {
 	case "NX":
-		SETsMu.RLock()
-		_, ok := SETs[key]
-		SETsMu.RUnlock()
+		kv.SETsMu.RLock()
+		_, ok := kv.SETs[key]
+		kv.SETsMu.RUnlock()
 		if ok {
 			return resp.Value{Typ: "null"}
 		}
 	case "XX":
-		SETsMu.RLock()
-		_, ok := SETs[key]
-		SETsMu.RUnlock()
+		kv.SETsMu.RLock()
+		_, ok := kv.SETs[key]
+		kv.SETsMu.RUnlock()
 		if !ok {
 			return resp.Value{Typ: "null"}
 		}
@@ -96,9 +96,9 @@ func set(args []resp.Value) resp.Value {
 	// Handling expiration
 	expiration := time.Now()
 	if keepttl {
-		SETsMu.RLock()
-		v, ok := SETs[key]
-		SETsMu.RUnlock()
+		kv.SETsMu.RLock()
+		v, ok := kv.SETs[key]
+		kv.SETsMu.RUnlock()
 		if !ok {
 			return resp.Value{Typ: "null"}
 		}
@@ -118,9 +118,9 @@ func set(args []resp.Value) resp.Value {
 	} else {
 		val = resp.Value{Typ: "string", Str: value}
 	}
-	SETsMu.Lock()
-	SETs[key] = val
-	SETsMu.Unlock()
+	kv.SETsMu.Lock()
+	kv.SETs[key] = val
+	kv.SETsMu.Unlock()
 
 	if get {
 		return val
@@ -129,35 +129,32 @@ func set(args []resp.Value) resp.Value {
 	}
 }
 
-func get(args []resp.Value) resp.Value {
+func get(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) != 1 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'get' command"}
 	}
 
 	key := args[0].Bulk
 
-	SETsMu.RLock()
-	value, ok := SETs[key]
-	SETsMu.RUnlock()
+	kv.SETsMu.RLock()
+	value, ok := kv.SETs[key]
+	kv.SETsMu.RUnlock()
 
 	if !ok {
 		return resp.Value{Typ: "null"}
 	}
 
 	if value.Expires > 0 && value.Expires < time.Now().Unix() {
-		SETsMu.Lock()
-		delete(SETs, key)
-		SETsMu.Unlock()
+		kv.SETsMu.Lock()
+		delete(kv.SETs, key)
+		kv.SETsMu.Unlock()
 		return resp.Value{Typ: "null"}
 	}
 
 	return value
 }
 
-var HSETs = map[string]map[string]string{}
-var HSETsMu = sync.RWMutex{}
-
-func hset(args []resp.Value) resp.Value {
+func hset(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) != 3 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'hset' command"}
 	}
@@ -166,17 +163,17 @@ func hset(args []resp.Value) resp.Value {
 	key := args[1].Bulk
 	value := args[2].Bulk
 
-	HSETsMu.Lock()
-	if _, ok := HSETs[hash]; !ok {
-		HSETs[hash] = map[string]string{}
+	kv.HSETsMu.Lock()
+	if _, ok := kv.HSETs[hash]; !ok {
+		kv.HSETs[hash] = map[string]string{}
 	}
-	HSETs[hash][key] = value
-	HSETsMu.Unlock()
+	kv.HSETs[hash][key] = value
+	kv.HSETsMu.Unlock()
 
 	return resp.Value{Typ: "string", Str: "OK"}
 }
 
-func hget(args []resp.Value) resp.Value {
+func hget(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) != 2 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'hget' command"}
 	}
@@ -184,9 +181,9 @@ func hget(args []resp.Value) resp.Value {
 	hash := args[0].Bulk
 	key := args[1].Bulk
 
-	HSETsMu.RLock()
-	value, ok := HSETs[hash][key]
-	HSETsMu.RUnlock()
+	kv.HSETsMu.RLock()
+	value, ok := kv.HSETs[hash][key]
+	kv.HSETsMu.RUnlock()
 
 	if !ok {
 		return resp.Value{Typ: "null"}
@@ -195,16 +192,16 @@ func hget(args []resp.Value) resp.Value {
 	return resp.Value{Typ: "bulk", Bulk: value}
 }
 
-func hgetall(args []resp.Value) resp.Value {
+func hgetall(args []resp.Value, kv *Database.Kv) resp.Value {
 	if len(args) != 1 {
 		return resp.Value{Typ: "error", Str: "ERR wrong number of arguments for 'hget' command"}
 	}
 
 	hash := args[0].Bulk
 
-	HSETsMu.RLock()
-	value, ok := HSETs[hash]
-	HSETsMu.RUnlock()
+	kv.HSETsMu.RLock()
+	value, ok := kv.HSETs[hash]
+	kv.HSETsMu.RUnlock()
 
 	if !ok {
 		return resp.Value{Typ: "null"}

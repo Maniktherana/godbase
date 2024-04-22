@@ -2,53 +2,18 @@ package main
 
 import (
 	"fmt"
-	"net"
-	"strings"
-
+	"github.com/maniktherana/godbase/pkg/Database"
 	"github.com/maniktherana/godbase/pkg/aof"
 	"github.com/maniktherana/godbase/pkg/handler"
 	"github.com/maniktherana/godbase/pkg/resp"
 	"github.com/maniktherana/godbase/pkg/writer"
+	"net"
+	"strings"
 )
 
-func main() {
-	fmt.Println("Listening on port :6379")
-
-	// Create a new server
-	l, err := net.Listen("tcp", ":6379")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
-	aof, err := aof.NewAof("database.aof")
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	defer aof.Close()
-
-	aof.Read(func(value resp.Value) {
-		command := strings.ToUpper(value.Array[0].Bulk)
-		args := value.Array[1:]
-
-		handler, ok := handler.Handlers[command]
-		if !ok {
-			fmt.Println("Invalid command: ", command)
-			return
-		}
-
-		handler(args)
-	})
-
-	// Listen for connections
-	conn, err := l.Accept()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-
+func handleConnection(conn net.Conn, kv *Database.Kv, aof *aof.Aof) {
 	defer conn.Close()
+	kv.Clients[conn.RemoteAddr().String()] = conn
 
 	for {
 		r := resp.NewResp(conn)
@@ -76,15 +41,68 @@ func main() {
 		handler, ok := handler.Handlers[command]
 		if !ok {
 			fmt.Println("Invalid command: ", command)
-			writer.Write(resp.Value{Typ: "string", Str: ""})
+			err := writer.Write(resp.Value{Typ: "string", Str: ""})
+			if err != nil {
+				fmt.Println("Error writing response:", err)
+				break
+			}
 			continue
 		}
 
 		if command == "SET" || command == "HSET" {
-			aof.Write(value)
+			err := aof.Write(value)
+			if err != nil {
+				fmt.Println("Error writing response:", err)
+				break
+			}
 		}
 
-		result := handler(args)
+		result := handler(args, kv)
 		writer.Write(result)
+	}
+}
+
+func main() {
+	// Create a new server
+	l, err := net.Listen("tcp", ":6379")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	kv := Database.NewKv()
+	fmt.Println("Listening on port :6379")
+
+	aof, err := aof.NewAof("database.aof")
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	defer aof.Close()
+
+	aof.Read(func(value resp.Value) {
+		command := strings.ToUpper(value.Array[0].Bulk)
+		args := value.Array[1:]
+
+		handler, ok := handler.Handlers[command]
+		if !ok {
+			fmt.Println("Invalid command: ", command)
+			return
+		}
+
+		handler(args, kv)
+	})
+
+	defer l.Close()
+
+	for {
+		// Listen for connections
+		conn, err := l.Accept()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		go handleConnection(conn, kv, aof)
 	}
 }
