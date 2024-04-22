@@ -7,6 +7,7 @@ import (
 	"github.com/maniktherana/godbase/pkg/handler"
 	"github.com/maniktherana/godbase/pkg/resp"
 	"github.com/maniktherana/godbase/pkg/writer"
+	"io"
 	"net"
 	"strings"
 )
@@ -19,8 +20,14 @@ func handleConnection(conn net.Conn, kv *Database.Kv, aof *aof.Aof) {
 		r := resp.NewResp(conn)
 		value, err := r.Read()
 		if err != nil {
-			fmt.Println(err)
+			if err == io.EOF {
+				fmt.Println("Client disconnected: ", conn.RemoteAddr().String())
+			} else {
+				fmt.Println("ERR IS", err)
+			}
 			return
+		} else {
+			fmt.Println("Client connected: ", conn.RemoteAddr().String())
 		}
 
 		if value.Typ != "array" {
