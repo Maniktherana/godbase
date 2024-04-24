@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"github.com/maniktherana/godbase/pkg/Database"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 )
 
 func TestPingHandler(t *testing.T) {
+	kv := Database.NewKv()
 	tt := []struct {
 		name     string
 		args     []resp.Value
@@ -28,13 +30,14 @@ func TestPingHandler(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			result := ping(tc.args)
+			result := ping(tc.args, kv)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
 func TestSetHandler(t *testing.T) {
+	kv := Database.NewKv()
 	tt := []struct {
 		name     string
 		args     []resp.Value
@@ -84,13 +87,55 @@ func TestSetHandler(t *testing.T) {
 
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
-			result := set(tc.args)
+			result := set(tc.args, kv)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
+func TestSetTimers(t *testing.T) {
+	kv := Database.NewKv()
+	expiresAt := time.Now()
+	tt := []struct {
+		name      string
+		setArgs   []resp.Value
+		getArgs   []resp.Value
+		sleepFor  time.Duration
+		expiresAt int64
+		expected  resp.Value
+	}{
+		{
+			name:      "EX",
+			setArgs:   []resp.Value{{Typ: "bulk", Bulk: "key1"}, {Typ: "bulk", Bulk: "value1"}, {Typ: "bulk", Bulk: "EX"}, {Typ: "bulk", Bulk: "1"}},
+			getArgs:   []resp.Value{{Typ: "bulk", Bulk: "key1"}},
+			sleepFor:  2 * time.Second,
+			expiresAt: expiresAt.Add(1 * time.Second).UnixMilli(),
+			expected:  resp.Value{Typ: "null"},
+		},
+		{
+			name:      "PX",
+			setArgs:   []resp.Value{{Typ: "bulk", Bulk: "key2"}, {Typ: "bulk", Bulk: "value2"}, {Typ: "bulk", Bulk: "PX"}, {Typ: "bulk", Bulk: "100"}},
+			getArgs:   []resp.Value{{Typ: "bulk", Bulk: "key2"}},
+			sleepFor:  101 * time.Millisecond,
+			expiresAt: expiresAt.Add(100 * time.Millisecond).UnixMilli(),
+			expected:  resp.Value{Typ: "null"},
+		},
+	}
+
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			setted := set(tc.setArgs, kv)
+			assert.Equal(t, resp.Value{Typ: "string", Str: "OK"}, setted)
+			time.Sleep(tc.sleepFor)
+			got := get(tc.getArgs, kv)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+
+}
+
 func TestGetHandler(t *testing.T) {
+	kv := Database.NewKv()
 	tests := []struct {
 		name     string
 		args     []resp.Value
@@ -101,9 +146,9 @@ func TestGetHandler(t *testing.T) {
 			name: "Existing Key",
 			args: []resp.Value{{Typ: "bulk", Bulk: "mykey"}},
 			setup: func() {
-				SETsMu.Lock()
-				SETs["mykey"] = resp.Value{Typ: "string", Str: "myvalue"}
-				SETsMu.Unlock()
+				kv.SETsMu.Lock()
+				kv.SETs["mykey"] = resp.Value{Typ: "string", Str: "myvalue"}
+				kv.SETsMu.Unlock()
 			},
 			expected: resp.Value{Typ: "string", Str: "myvalue"},
 		},
@@ -112,7 +157,7 @@ func TestGetHandler(t *testing.T) {
 			args: []resp.Value{{Typ: "bulk", Bulk: "mykey"}},
 			setup: func() {
 				// Set up initial value with expiry time
-				set([]resp.Value{{Typ: "bulk", Bulk: "mykey"}, {Typ: "bulk", Bulk: "dummyvalue"}, {Typ: "bulk", Bulk: "EX"}, {Typ: "bulk", Bulk: "1"}})
+				set([]resp.Value{{Typ: "bulk", Bulk: "mykey"}, {Typ: "bulk", Bulk: "dummyvalue"}, {Typ: "bulk", Bulk: "EX"}, {Typ: "bulk", Bulk: "1"}}, kv)
 				time.Sleep(2 * time.Second)
 			},
 			expected: resp.Value{Typ: "null"},
@@ -129,13 +174,14 @@ func TestGetHandler(t *testing.T) {
 			if test.setup != nil {
 				test.setup()
 			}
-			result := get(test.args)
+			result := get(test.args, kv)
 			assert.Equal(t, test.expected, result)
 		})
 	}
 }
 
 func TestHsetHandler(tt *testing.T) {
+	kv := Database.NewKv()
 	tests := []struct {
 		name     string
 		args     []resp.Value
@@ -155,13 +201,14 @@ func TestHsetHandler(tt *testing.T) {
 
 	for _, tc := range tests {
 		tt.Run(tc.name, func(t *testing.T) {
-			result := hset(tc.args)
+			result := hset(tc.args, kv)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
 func TestHgetHandler(tt *testing.T) {
+	kv := Database.NewKv()
 	tests := []struct {
 		name     string
 		args     []resp.Value
@@ -173,9 +220,9 @@ func TestHgetHandler(tt *testing.T) {
 			args: []resp.Value{{Typ: "bulk", Bulk: "hash"}, {Typ: "bulk", Bulk: "key"}},
 			setup: func() {
 				// Set up the initial key-value pair
-				HSETsMu.Lock()
-				HSETs["hash"] = map[string]string{"key": "value"}
-				HSETsMu.Unlock()
+				kv.HSETsMu.Lock()
+				kv.HSETs["hash"] = map[string]string{"key": "value"}
+				kv.HSETsMu.Unlock()
 			},
 			expected: resp.Value{Typ: "bulk", Bulk: "value"},
 		},
@@ -196,13 +243,14 @@ func TestHgetHandler(tt *testing.T) {
 			if tc.setup != nil {
 				tc.setup()
 			}
-			result := hget(tc.args)
+			result := hget(tc.args, kv)
 			assert.Equal(t, tc.expected, result)
 		})
 	}
 }
 
 func TestHgetallHandler(tt *testing.T) {
+	kv := Database.NewKv()
 	tests := []struct {
 		name     string
 		args     []resp.Value
@@ -214,9 +262,9 @@ func TestHgetallHandler(tt *testing.T) {
 			args: []resp.Value{{Typ: "bulk", Bulk: "hash"}},
 			setup: func() {
 				// Set up the initial key-value pairs
-				HSETsMu.Lock()
-				HSETs["hash"] = map[string]string{"key1": "value1", "key2": "value2"}
-				HSETsMu.Unlock()
+				kv.HSETsMu.Lock()
+				kv.HSETs["hash"] = map[string]string{"key1": "value1", "key2": "value2"}
+				kv.HSETsMu.Unlock()
 			},
 			expected: resp.Value{Typ: "bulk", Array: []resp.Value{
 				{Typ: "bulk", Bulk: "key1"},
@@ -242,7 +290,7 @@ func TestHgetallHandler(tt *testing.T) {
 			if tc.setup != nil {
 				tc.setup()
 			}
-			result := hgetall(tc.args)
+			result := hgetall(tc.args, kv)
 			assert.Equal(t, tc.expected, result)
 		})
 	}

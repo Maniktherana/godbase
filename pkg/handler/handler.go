@@ -113,8 +113,8 @@ func set(args []resp.Value, kv *Database.Kv) resp.Value {
 
 	// Setting the value
 	var val resp.Value
-	if expiration.Unix() > time.Now().Unix() {
-		val = resp.Value{Typ: "string", Str: value, Expires: expiration.Unix()}
+	if expiration.UnixMilli() > time.Now().UnixMilli() {
+		val = resp.Value{Typ: "string", Str: value, Expires: expiration.UnixMilli()}
 	} else {
 		val = resp.Value{Typ: "string", Str: value}
 	}
@@ -144,7 +144,7 @@ func get(args []resp.Value, kv *Database.Kv) resp.Value {
 		return resp.Value{Typ: "null"}
 	}
 
-	if value.Expires > 0 && value.Expires < time.Now().Unix() {
+	if value.Expires > 0 && value.Expires < time.Now().UnixMilli() {
 		kv.SETsMu.Lock()
 		delete(kv.SETs, key)
 		kv.SETsMu.Unlock()
